@@ -1,11 +1,19 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
-// This check can be removed, it is just for tutorial purposes
-export const hasEnvVars =
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export function hasEnvVars() {
+  return (
+    typeof process.env.NEXT_PUBLIC_SUPABASE_URL === "string" &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0 &&
+    (
+      (typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "string" &&
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0) ||
+      (typeof process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY === "string" &&
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.length > 0)
+    )
+  );
+}
