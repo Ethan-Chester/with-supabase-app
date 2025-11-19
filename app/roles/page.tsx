@@ -59,7 +59,7 @@ import {
   deleteRole,
 } from "@/lib/roles-graphql";
 
-// reveal animation helper
+// reveal anim
 type RevealProps = {
   children: React.ReactNode;
   delay?: number;
@@ -79,9 +79,8 @@ function RevealLine({ children, delay = 0, className = "" }: RevealProps) {
   );
 }
 
-
 type RoleFormState = {
-  roleId?: string;
+  isEditing: boolean;
   roleName: string;
   roleDescription: string;
 };
@@ -94,9 +93,12 @@ export default function Page() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const [formState, setFormState] = useState<RoleFormState>({
+    isEditing: false,
     roleName: "",
     roleDescription: "",
   });
+
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
   const [saving, setSaving] = useState(false);
@@ -117,52 +119,96 @@ export default function Page() {
   }, []);
 
   const openCreate = () => {
-    setFormState({ roleName: "", roleDescription: "" });
+    setFormState({
+      isEditing: false,
+      roleName: "",
+      roleDescription: "",
+    });
+    setFormError(null);
     setIsFormOpen(true);
   };
 
   const openEdit = (role: Role) => {
     setFormState({
-      roleId: role.role_id,
+      isEditing: true,
       roleName: role.role_name,
       roleDescription: role.role_description ?? "",
     });
+    setFormError(null);
     setIsFormOpen(true);
   };
 
   const handleSave = async () => {
-  if (!formState.roleName.trim() || !formState.roleDescription.trim()) {
-    return; 
-  }
+    const name = formState.roleName.trim();
+    const desc = formState.roleDescription.trim();
 
-  setSaving(true);
-  try {
-    if (formState.roleId) {
-      const updated = await updateRole({
-        role_id: formState.roleId,
-        role_name: formState.roleName.trim(),
-        role_description: formState.roleDescription.trim(), 
-      });
-
-      setRoles((prev) =>
-        prev.map((r) => (r.role_id === updated.role_id ? updated : r)),
-      );
-    } else {
-      const created = await createRole({
-        role_name: formState.roleName.trim(),
-        role_description: formState.roleDescription.trim(), 
-      });
-
-      setRoles((prev) => [...prev, created]);
+    // required validation
+    if (!name && !desc) {
+      setFormError("Name and description are required.");
+      return;
+    }
+    if (!name) {
+      setFormError("Name is required.");
+      return;
+    }
+    if (!desc) {
+      setFormError("Description is required.");
+      return;
     }
 
-    setIsFormOpen(false);
-  } catch (err) {
-    console.error("Failed to save role", err);
-  } finally {
-    setSaving(false);
-  }
-};
+    // duplicate-name check on the client for create
+    if (!formState.isEditing) {
+      const exists = roles.some(
+        (r) => r.role_name.toLowerCase() === name.toLowerCase(),
+      );
+      if (exists) {
+        setFormError("A job description with this name already exists.");
+        return;
+      }
+    }
+
+    setSaving(true);
+    setFormError(null);
+
+    try {
+      if (formState.isEditing) {
+        // Update existing role (role_name is the identifier now)
+        const updated = await updateRole({
+          role_name: name,
+          role_description: desc,
+        });
+
+        setRoles((prev) =>
+          prev.map((r) =>
+            r.role_name === updated.role_name ? updated : r,
+          ),
+        );
+      } else {
+        // Create new role
+        const created = await createRole({
+          role_name: name,
+          role_description: desc,
+        });
+
+        setRoles((prev) => [...prev, created]);
+      }
+
+      setIsFormOpen(false);
+    } catch (err: any) {
+      console.error("Failed to save role", err);
+
+      const message =
+        typeof err?.message === "string" ? err.message.toLowerCase() : "";
+
+      if (message.includes("duplicate") || message.includes("unique")) {
+        setFormError("A job description with this name already exists.");
+      } else {
+        setFormError("Something went wrong while saving. Please try again.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const confirmDelete = (role: Role) => {
     setRoleToDelete(role);
@@ -174,8 +220,10 @@ export default function Page() {
 
     setDeleting(true);
     try {
-      await deleteRole(roleToDelete.role_id);
-      setRoles((prev) => prev.filter((r) => r.role_id !== roleToDelete.role_id));
+      await deleteRole(roleToDelete.role_name);
+      setRoles((prev) =>
+        prev.filter((r) => r.role_name !== roleToDelete.role_name),
+      );
       setIsDeleteOpen(false);
       setRoleToDelete(null);
     } catch (err) {
@@ -223,9 +271,9 @@ export default function Page() {
           </RevealLine>
         </div>
 
-        {/* cards / empty state */}
+        {/* cards grid */}
         <main className="px-4 pb-8">
-          {roles.length === 0 ? (
+          {loading ? null : roles.length === 0 ? (
             <div className="flex items-center justify-center py-20">
               <Empty>
                 <EmptyHeader>
@@ -238,8 +286,12 @@ export default function Page() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button size="sm" onClick={openCreate} className="bg-sidebar">
-                    <Plus className="h-4 w-4 mr-2"/>
+                  <Button
+                    size="sm"
+                    onClick={openCreate}
+                    className="bg-sidebar"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
                     Add Job Description
                   </Button>
                 </EmptyContent>
@@ -251,7 +303,7 @@ export default function Page() {
                 const baseDelay = 150 + index * 90;
                 return (
                   <div
-                    key={role.role_id}
+                    key={role.role_name}
                     className="card-pop"
                     style={{ animationDelay: `${baseDelay}ms` }}
                   >
@@ -317,7 +369,9 @@ export default function Page() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {formState.roleId ? "Edit Job Description" : "Add Job Description"}
+                {formState.isEditing
+                  ? "Edit Job Description"
+                  : "Add Job Description"}
               </DialogTitle>
             </DialogHeader>
 
@@ -325,7 +379,7 @@ export default function Page() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Name</label>
                 <Input
-                required
+                  required
                   value={formState.roleName}
                   onChange={(e) =>
                     setFormState((prev) => ({
@@ -334,13 +388,19 @@ export default function Page() {
                     }))
                   }
                   placeholder="Job description name"
+                  disabled={formState.isEditing}
                 />
+                {formState.isEditing && (
+                  <p className="text-xs text-muted-foreground">
+                    Name can&rsquo;t be changed after creation.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">Description</label>
                 <Textarea
-                required
+                  required
                   value={formState.roleDescription}
                   onChange={(e) =>
                     setFormState((prev) => ({
@@ -352,6 +412,10 @@ export default function Page() {
                   rows={4}
                 />
               </div>
+
+              {formError && (
+                <p className="text-sm text-destructive">{formError}</p>
+              )}
             </div>
 
             <DialogFooter className="mt-4">
@@ -363,7 +427,7 @@ export default function Page() {
                 Cancel
               </Button>
               <Button onClick={handleSave} disabled={saving} type="button">
-                {formState.roleId ? "Save changes" : "Create"}
+                {formState.isEditing ? "Save changes" : "Create"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -378,7 +442,8 @@ export default function Page() {
               </AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently remove the
-                job description &quot;{roleToDelete?.role_name}&quot; from your database.
+                job description &quot;{roleToDelete?.role_name}&quot; from your
+                database.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

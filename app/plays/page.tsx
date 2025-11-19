@@ -1,3 +1,7 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -14,8 +18,7 @@ import {
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Plus, ChevronRight } from "lucide-react";
-import React from "react";
+import { Plus, ChevronRight, Layers } from "lucide-react";
 
 import {
   Table,
@@ -26,8 +29,45 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// reveal anim
+import { Input } from "@/components/ui/input";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+
+import type { Play } from "@/lib/plays-graphql";
+import {
+  getPlays,
+  createPlay,
+  updatePlay,
+  deletePlay,
+} from "@/lib/plays-graphql";
+
+// reveal anim
 type RevealProps = {
   children: React.ReactNode;
   delay?: number;
@@ -47,30 +87,105 @@ function RevealLine({ children, delay = 0, className = "" }: RevealProps) {
   );
 }
 
+type PlayFormState = {
+  play_id?: string;
+  play_name: string;
+};
+
 export default function Page() {
-// mock plays data TODO: connect page with supabase to CRUD
-  const plays = [
-    { id: "1", name: "Client Quarterly Check-In" },
-    { id: "2", name: "Email Sending and Processing Play" },
-    { id: "3", name: "Stephen Prod Testing Play" },
-    { id: "4", name: "New Client Onboarding Workflow" },
-    { id: "5", name: "Employee Onboarding Sequence" },
-    { id: "6", name: "Invoice Review and Approval Play" },
-    { id: "7", name: "Weekly Social Media Publishing" },
-    { id: "8", name: "Lead Qualification and Routing" },
-    { id: "9", name: "Contract Review and Signature" },
-    { id: "10", name: "Monthly Financial Reporting" },
-    { id: "11", name: "Customer Support Ticket Escalation" },
-    { id: "12", name: "Vendor Payment Processing" },
-    { id: "13", name: "Marketing Campaign Launch Checklist" },
-    { id: "14", name: "Website Content Update Workflow" },
-    { id: "15", name: "Performance Review Preparation" },
-    { id: "16", name: "IT Access Provisioning Play" },
-    { id: "17", name: "Client Offboarding Procedure" },
-    { id: "18", name: "Data Backup and Compliance Check" },
-    { id: "19", name: "Quarterly KPI Review Workflow" },
-    { id: "20", name: "Sales Proposal Creation Play" },
-  ];
+  const [plays, setPlays] = useState<Play[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  const [formState, setFormState] = useState<PlayFormState>({
+    play_name: "",
+  });
+
+  const [playToDelete, setPlayToDelete] = useState<Play | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // load plays on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getPlays();
+        setPlays(data);
+      } catch (err) {
+        console.error("Failed to load plays", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const openCreate = () => {
+    setFormState({ play_name: "" });
+    setIsFormOpen(true);
+  };
+
+  const openEdit = (play: Play) => {
+    setFormState({
+      play_id: play.play_id,
+      play_name: play.play_name,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formState.play_name.trim()) return;
+
+    setSaving(true);
+    try {
+      if (formState.play_id) {
+        const updated = await updatePlay({
+          play_id: formState.play_id,
+          play_name: formState.play_name.trim(),
+        });
+
+        setPlays((prev) =>
+          prev.map((p) => (p.play_id === updated.play_id ? updated : p)),
+        );
+      } else {
+        const created = await createPlay({
+          play_name: formState.play_name.trim(),
+        });
+
+        setPlays((prev) => [...prev, created]);
+      }
+
+      setIsFormOpen(false);
+    } catch (err) {
+      console.error("Failed to save play", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = (play: Play) => {
+    setPlayToDelete(play);
+    setIsDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!playToDelete) return;
+
+    setDeleting(true);
+    try {
+      await deletePlay(playToDelete.play_id);
+      setPlays((prev) =>
+        prev.filter((p) => p.play_id !== playToDelete.play_id),
+      );
+      setIsDeleteOpen(false);
+      setPlayToDelete(null);
+    } catch (err) {
+      console.error("Failed to delete play", err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -109,101 +224,198 @@ export default function Page() {
             <Button
               size="sm"
               className="bg-sidebar text-white py-5"
-              asChild
+              onClick={openCreate}
             >
-              <Link href="/roles" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                New Play
-              </Link>
+              <Plus className="h-4 w-4" />
+              New Play
             </Button>
           </RevealLine>
         </div>
 
         {/* main content */}
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <Card
-            className="card-pop flex flex-1 flex-col rounded-xl"
-            style={{ animationDelay: "260ms" }}
-          >
-            <CardHeader className="pb-3 px-6">
-              <CardTitle className="text-base">
-                <RevealLine delay={300}>Available Plays</RevealLine>
-              </CardTitle>
-            </CardHeader>
+        <main className="px-4 pb-8">
+        {loading ? null : plays.length === 0 ? (
+            <div className="flex items-center justify-center py-20">
+            <Empty>
+                <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Layers className="h-8 w-8 text-muted-foreground" />
+                </EmptyMedia>
+                <EmptyTitle>No plays yet</EmptyTitle>
+                <EmptyDescription>
+                    Create your first play to get started.
+                </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                <Button
+                    size="sm"
+                    onClick={openCreate}
+                    className="bg-sidebar"
+                >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Play
+                </Button>
+                </EmptyContent>
+            </Empty>
+            </div>
+        ) : (
+            <div className="flex flex-1 flex-col gap-4">
+            <Card
+                className="card-pop flex flex-1 flex-col rounded-xl"
+                style={{ animationDelay: "260ms" }}
+            >
+                <CardHeader className="pb-3 px-6">
+                <CardTitle className="text-base">
+                    <RevealLine delay={300}>Available Plays</RevealLine>
+                </CardTitle>
+                </CardHeader>
 
-            <CardContent className="pt-0 px-6">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-border/40 hover:bg-transparent">
-                    <TableHead className="px-0">Play</TableHead>
-                    <TableHead className="px-0 text-right w-32">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
+                <CardContent className="pt-0 px-6">
+                <Table>
+                    <TableHeader>
+                    <TableRow className="border-b border-border/40 hover:bg-transparent">
+                        <TableHead className="px-0">Play</TableHead>
+                        <TableHead className="px-0 text-right w-32">
+                        Actions
+                        </TableHead>
+                    </TableRow>
+                    </TableHeader>
 
-                <TableBody>
-                  {plays.map((play, index) => {
-                    const baseDelay = 340 + index * 40; // edit *X to change stagger speed
-                    return (
-                      <TableRow
-                        key={play.id}
-                        className="
-                          group
-                          hover:bg-muted/40
-                          transition-colors
-                          border-0
-                          border-b 
-                          border-border/40
-                          last:border-b-0
-                        "
-                      >
-                        {/* green slider */}
-                        <TableCell className="px-0 py-2.5 font-medium">
-                          <RevealLine delay={baseDelay}>
-                            <span className="relative group inline-block">
-                              {play.name}
-                              <span
-                                className="
-                                  absolute 
-                                  left-0
-                                  bottom-0        
-                                  h-[2px]
-                                  bg-emerald-600
-                                  w-0
-                                  origin-left
-                                  transition-all duration-300 ease-out
-                                  group-hover:w-full
-                                "
-                              />
-                            </span>
-                          </RevealLine>
-                        </TableCell>
+                    <TableBody>
+                    {plays.map((play, index) => {
+                        const baseDelay = 340 + index * 40;
+                        return (
+                        <TableRow
+                            key={play.play_id}
+                            className="
+                            group
+                            hover:bg-muted/40
+                            transition-colors
+                            border-0
+                            border-b 
+                            border-border/40
+                            last:border-b-0
+                            "
+                        >
+                            <TableCell className="px-0 py-2.5 font-medium">
+                            <RevealLine delay={baseDelay}>
+                                <span className="relative group inline-block">
+                                {play.play_name}
+                                <span
+                                    className="
+                                    absolute 
+                                    left-0
+                                    bottom-0        
+                                    h-[2px]
+                                    bg-emerald-600
+                                    w-0
+                                    origin-left
+                                    transition-all duration-300 ease-out
+                                    group-hover:w-full
+                                    "
+                                />
+                                </span>
+                            </RevealLine>
+                            </TableCell>
 
-                        {/* details button */}
-                        <TableCell className="px-0 py-2.5 text-right">
-                          <RevealLine delay={baseDelay + 60}>
-                            <Button variant="outline" size="sm" asChild>
-                              <Link
-                                href={`/playpage/${play.id}`}
-                                className="flex items-center gap-1"
-                              >
-                                View Details
-                                <ChevronRight className="h-3 w-3" />
-                              </Link>
-                            </Button>
-                          </RevealLine>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+                            <TableCell className="px-0 py-2.5 text-right">
+                            <RevealLine delay={baseDelay + 60}>
+                                <Button variant="outline" size="sm" asChild>
+                                <Link
+                                    href={`/plays/${play.play_id}`}
+                                    className="flex items-center gap-1"
+                                >
+                                    View Details
+                                    <ChevronRight className="h-3 w-3" />
+                                </Link>
+                                </Button>
+                            </RevealLine>
+                            </TableCell>
+                        </TableRow>
+                        );
+                    })}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+            </div>
+        )}
+        </main>
+
+        {/* Create / Edit dialog */}
+        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {formState.play_id ? "Edit Play" : "New Play"}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Name</label>
+                <Input
+                  required
+                  value={formState.play_name}
+                  onChange={(e) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      play_name: e.target.value,
+                    }))
+                  }
+                  placeholder="Play name"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsFormOpen(false)}
+                type="button"
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving} type="button">
+                {formState.play_id ? "Save changes" : "Create"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* delete confirm dialog */}
+        <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Are you sure you want to delete this play?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently remove
+                the play &quot;{playToDelete?.play_name}&quot; from your
+                database.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsDeleteOpen(false);
+                  setPlayToDelete(null);
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
     </SidebarProvider>
   );
 }
-

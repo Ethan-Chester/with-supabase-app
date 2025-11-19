@@ -10,38 +10,52 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-// Map URL paths to breadcrumb trails (more dynamic than setting them up per page)
-const breadcrumbConfig: Record<
-  string,
-  { label: string; href?: string }[]
-> = {
+type Crumb = { label: string; href?: string };
+
+const breadcrumbConfig: Record<string, Crumb[]> = {
   "/": [{ label: "Dashboard", href: "/" }],
   "/dashboard": [{ label: "Dashboard", href: "/dashboard" }],
   "/plays": [
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Plays" },
+    { label: "Plays", href: "/plays" },
   ],
   "/roles": [
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Job Descriptions" },
+    { label: "Job Descriptions", href: "/roles" },
   ],
   "/settings": [
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Settings" },
+    { label: "Settings", href: "/settings" },
   ],
 };
 
-export function AppBreadcrumb() {
+type AppBreadcrumbProps = {
+  extraCrumbs?: Crumb[];
+};
+
+export function AppBreadcrumb({ extraCrumbs }: AppBreadcrumbProps) {
   const pathname = usePathname();
-  const crumbs = breadcrumbConfig[pathname] ?? [
-    { label: "Dashboard", href: "/dashboard" },
-  ];
+
+  let baseCrumbs: Crumb[] | undefined = breadcrumbConfig[pathname];
+
+  // Any nested plays route uses /plays as the base
+  if (!baseCrumbs && pathname.startsWith("/plays/")) {
+    baseCrumbs = breadcrumbConfig["/plays"];
+  }
+
+  // Fallback
+  if (!baseCrumbs) {
+    baseCrumbs = [{ label: "Dashboard", href: "/dashboard" }];
+  }
+
+  const crumbs = extraCrumbs ? [...baseCrumbs, ...extraCrumbs] : baseCrumbs;
 
   return (
     <Breadcrumb>
       <BreadcrumbList>
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;
+
           return (
             <span key={crumb.label} className="flex items-center">
               <BreadcrumbItem>

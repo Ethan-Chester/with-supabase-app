@@ -2,7 +2,6 @@ import { gql } from "./graphql";
 import { getOrCreateClientId } from "./client-id";
 
 export type Role = {
-  role_id: string;
   role_name: string;
   role_description: string | null;
   client_id: string | null;
@@ -35,7 +34,6 @@ export async function getRoles(): Promise<Role[]> {
       ) {
         edges {
           node {
-            role_id
             role_name
             role_description
             client_id
@@ -76,7 +74,6 @@ export async function createRole(input: {
         ]
       ) {
         records {
-          role_id
           role_name
           role_description
           client_id
@@ -95,8 +92,8 @@ export async function createRole(input: {
 }
 
 // UPDATE: update an existing role owned by this device
+// Here we treat role_name as the identifier and only update the description.
 export async function updateRole(input: {
-  role_id: string;
   role_name: string;
   role_description: string;
 }): Promise<Role> {
@@ -107,23 +104,20 @@ export async function updateRole(input: {
   }>(
     `
     mutation UpdateRole(
-      $role_id: uuid!
       $role_name: String!
       $role_description: String!
       $client_id: String!
     ) {
       updaterolesCollection(
         filter: {
-          role_id: { eq: $role_id }
+          role_name: { eq: $role_name }
           client_id: { eq: $client_id }
         }
         set: {
-          role_name: $role_name
           role_description: $role_description
         }
       ) {
         records {
-          role_id
           role_name
           role_description
           client_id
@@ -132,7 +126,6 @@ export async function updateRole(input: {
     }
   `,
     {
-      role_id: input.role_id,
       role_name: input.role_name,
       role_description: input.role_description,
       client_id,
@@ -143,17 +136,17 @@ export async function updateRole(input: {
 }
 
 // DELETE: delete a role owned by this device
-export async function deleteRole(role_id: string): Promise<void> {
+export async function deleteRole(role_name: string): Promise<void> {
   const client_id = getClientIdOrThrow();
 
   await gql<{
     deleteFromrolesCollection: { affectedCount: number };
   }>(
     `
-    mutation DeleteRole($role_id: UUID!, $client_id: String!) {
+    mutation DeleteRole($role_name: String!, $client_id: String!) {
       deleteFromrolesCollection(
         filter: {
-          role_id: { eq: $role_id }
+          role_name: { eq: $role_name }
           client_id: { eq: $client_id }
         }
       ) {
@@ -161,6 +154,6 @@ export async function deleteRole(role_id: string): Promise<void> {
       }
     }
   `,
-    { role_id, client_id }
+    { role_name, client_id }
   );
 }
