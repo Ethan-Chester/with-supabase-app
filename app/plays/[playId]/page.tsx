@@ -66,6 +66,8 @@ import {
   updatePlay,
   deletePlay,
 } from "@/lib/plays-graphql";
+import Link from "next/link";
+
 
 // reveal anim
 type RevealProps = {
@@ -233,8 +235,13 @@ export default function PlayPage() {
           {!loading && play && (
             <RevealLine delay={220} className="inline-block">
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={openEdit}>
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    href={`/plays/${play.play_id}/edit`}
+                    className="flex items-center gap-1"
+                  >
                   Edit
+                  </Link>
                 </Button>
                 <Button
                   variant="destructive"
