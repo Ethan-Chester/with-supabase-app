@@ -107,7 +107,6 @@ export default function Page() {
           </div>
           <RevealLine delay={220} className="inline-block">
             <Button
-              variant="outline"
               size="sm"
               className="bg-sidebar text-white py-5"
               asChild
@@ -207,3 +206,4 @@ export default function Page() {
     </SidebarProvider>
   );
 }
+
